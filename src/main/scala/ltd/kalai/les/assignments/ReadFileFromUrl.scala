@@ -17,16 +17,22 @@ object ReadFileFromUrl {
 
     val outputDir = "/Users/shan/http/docs/"
     val outputFileName = "concatenated_output.txt"
-    val urls = loadUrlsFromYaml("urls.yaml")
+    val urls = loadUrlsFromYaml("urls.yaml", true)
+
+    createConcatenatedFile(urls, outputDir, outputFileName)
+  }
+
+  def createConcatenatedFile(urls: List[String], outputDir: String, outputFileName: String): Unit = {
+    val logger = LoggerFactory.getLogger(this.getClass)
 
     val outputDirectory = new File(outputDir)
     if (!outputDirectory.exists()) {
       outputDirectory.mkdirs()
     }
+
     val outputFile = new File(outputDir + outputFileName)
 
     try {
-
       val concatenatedContent = urls.map { url =>
         logger.info(s"Processing URL: $url")
         try {
@@ -40,26 +46,36 @@ object ReadFileFromUrl {
           } finally {
             source.close()
           }
-        } catch
+        } catch {
           case e: Exception =>
             logger.error(s"Failed to read from $url: ${e.getMessage}")
+            ""
+        }
       }.mkString("\n")
 
       writeToFile(outputFile, concatenatedContent)
-
-    } catch
+    } catch {
       case e: Exception =>
         logger.error(s"Failed to concatenate files: ${e.getMessage}")
-
+    }
   }
 
-  private def loadUrlsFromYaml(fileName: String): List[String] = {
+  def loadUrlsFromYaml(fileName: String, isClasspathResource: Boolean): List[String] = {
+
+    val yaml = new Yaml()
+    var inputStream: InputStream = null
+
     try {
-      val yaml = new Yaml()
-      val inputStream: InputStream = getClass.getClassLoader.getResourceAsStream(fileName)
-      if (inputStream == null) {
-        throw new FileNotFoundException(s"File $fileName not found")
+
+      if (!isClasspathResource && Paths.get(fileName).toFile.exists()) {
+        logger.info(s"Loading YAML from file path: $fileName")
+        inputStream = new FileInputStream(fileName)
+      } else {
+          logger.info(s"Loading YAML from classpath: $fileName")
+          inputStream = Option(getClass.getClassLoader.getResourceAsStream(fileName))
+            .getOrElse(throw new FileNotFoundException(s"File $fileName not found on classpath"))
       }
+
       val data = yaml.load(inputStream).asInstanceOf[java.util.Map[String, java.util.List[String]]]
       inputStream.close()
       data.get("urls").asScala.toList
@@ -69,7 +85,7 @@ object ReadFileFromUrl {
         List.empty
   }
 
-  private def downloadFile(fileUrl: String): File = {
+  def downloadFile(fileUrl: String): File = {
     try {
       val url = new URI(fileUrl)
       val utl = url.toURL
@@ -85,7 +101,7 @@ object ReadFileFromUrl {
         throw new RuntimeException(s"Failed to download file from $fileUrl: ${e.getMessage}", e)
   }
 
-  private def writeToFile(outputFile: File, content: String): Unit = {
+  def writeToFile(outputFile: File, content: String): Unit = {
     val writer = new BufferedWriter(new FileWriter(outputFile))
     try {
       writer.write(content)
@@ -93,5 +109,7 @@ object ReadFileFromUrl {
       writer.close()
     }
   }
+
+
 
 }
