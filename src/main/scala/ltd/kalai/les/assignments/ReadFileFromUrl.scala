@@ -64,11 +64,7 @@ object ReadFileFromUrl {
   }
 
   def createConcatenatedFileWithConcurrency(urls: List[String], outputDir: String, outputFileName: String): Boolean = {
-    val outputDirectory = new File(outputDir)
-    if (!outputDirectory.exists()) {
-      outputDirectory.mkdirs()
-    }
-    val outputFile = new File(outputDir + outputFileName)
+    val outputFile: File = createDirectoryAndFile(outputDir, outputFileName)
 
     val semaphore = new Semaphore(9) // Limit concurrency to a maximum of 3 active downloads
     implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(Executors.newCachedThreadPool())
@@ -120,11 +116,7 @@ object ReadFileFromUrl {
   }
 
   def createConcatenatedFile(urls: List[String], outputDir: String, outputFileName: String): Either[String, Unit] = {
-    val outputDirectory = new File(outputDir)
-    if (!outputDirectory.exists()) {
-      outputDirectory.mkdirs()
-    }
-    val outputFile = new File(outputDir + outputFileName)
+    val outputFile: File = createDirectoryAndFile(outputDir, outputFileName)
 
     val concatenatedContent = urls.map { url =>
       logger.info(s"Processing URL: $url")
@@ -140,6 +132,15 @@ object ReadFileFromUrl {
     }.mkString("\n")
 
     writeToFile(outputFile, concatenatedContent)
+  }
+
+  private def createDirectoryAndFile(outputDir: String, outputFileName: String) = {
+    val outputDirectory = new File(outputDir)
+    if (!outputDirectory.exists()) {
+      outputDirectory.mkdirs()
+    }
+    val outputFile = new File(outputDir + outputFileName)
+    outputFile
   }
 
   def loadUrlsFromYaml(fileName: String, isClasspathResource: Boolean): Either[String, List[String]] = {
