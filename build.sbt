@@ -7,6 +7,7 @@ lazy val root = (project in file("."))
     name := "assignments",
     libraryDependencies ++= Seq(
       "org.slf4j" % "slf4j-api" % "2.0.16",
-      "ch.qos.logback" % "logback-classic" % "1.5.16"
+      "ch.qos.logback" % "logback-classic" % "1.5.16",
+      "org.yaml" % "snakeyaml" % "2.3"
     )
   )

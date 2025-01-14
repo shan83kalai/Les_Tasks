@@ -1,0 +1,10 @@
+urls:
+  - "http://localhost:9090/docs/File_1.txt"
+  - "http://localhost:9090/docs/File_2.txt"
+  - "http://localhost:9090/docs/File_3.txt"
+  - "http://localhost:9090/docs/File_4.txt"
+  - "http://localhost:9090/docs/File_5.txt"
+  - "http://localhost:9090/docs/File_6.txt"
+  - "http://localhost:9090/docs/File_7.txt"
+  - "http://localhost:9090/docs/File_8.txt"
+  - "http://localhost:9090/docs/File_9.txt"

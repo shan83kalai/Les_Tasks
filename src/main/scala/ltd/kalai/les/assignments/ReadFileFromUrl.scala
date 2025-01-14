@@ -1,25 +1,19 @@
 package ltd.kalai.les.assignments
 
-import scala.io.Source
 import org.slf4j.LoggerFactory
+import org.yaml.snakeyaml.Yaml
+
+import java.io.{FileNotFoundException, InputStream}
+import scala.io.Source
+import scala.jdk.CollectionConverters._
 
 object ReadFileFromUrl {
 
   private val logger = LoggerFactory.getLogger(ReadFileFromUrl.getClass)
 
   def main(args: Array[String]): Unit = {
-
-    val urls = List(
-      "http://localhost:9090/docs/File_1.txt",
-      "http://localhost:9090/docs/File_2.txt",
-      "http://localhost:9090/docs/File_3.txt",
-      "http://localhost:9090/docs/File_4.txt",
-      "http://localhost:9090/docs/File_5.txt",
-      "http://localhost:9090/docs/File_6.txt",
-      "http://localhost:9090/docs/File_7.txt",
-      "http://localhost:9090/docs/File_8.txt",
-      "http://localhost:9090/docs/File_9.txt"
-    )
+    
+    val urls = loadUrlsFromYaml("urls.yaml")
 
     urls.foreach { url =>
       logger.info(s"Reading from URL: $url")
@@ -36,6 +30,22 @@ object ReadFileFromUrl {
           logger.error(s"Failed to read from $url: ${e.getMessage}")
       }
     }
+  }
+  
+  private def loadUrlsFromYaml(fileName: String): List[String] = {
+    try {
+      val yaml = new Yaml()
+      val inputStream: InputStream = getClass.getClassLoader.getResourceAsStream(fileName)
+      if (inputStream == null) {
+        throw new FileNotFoundException(s"File $fileName not found")
+      }
+      val data = yaml.load(inputStream).asInstanceOf[java.util.Map[String, java.util.List[String]]]
+      inputStream.close()
+      data.get("urls").asScala.toList
+    } catch
+      case e: Exception =>
+        logger.error(s"Failed to load URLs from $fileName: ${e.getMessage}")
+        List.empty
   }
 
 }
