@@ -8,6 +8,9 @@ import java.net.URI
 import java.nio.file.{Files, Paths, StandardCopyOption}
 import scala.io.Source
 import scala.jdk.CollectionConverters.*
+import scala.concurrent.{ExecutionContext, Future}
+import java.util.concurrent.{Executors, Semaphore}
+import scala.util.{Failure, Success}
 
 object ReadFileFromUrl {
 
@@ -19,17 +22,86 @@ object ReadFileFromUrl {
     val outputFileName = "concatenated_output.txt"
     val urls = loadUrlsFromYaml("urls.yaml", true)
 
+//    urls match {
+//      case Left(error) =>
+//        logger.error(s"Error loading URLs: $error")
+//      case Right(urlList) =>
+//        createConcatenatedFile(urlList, outputDir, outputFileName) match {
+//          case Left(error) =>
+//            logger.error(s"Error creating concatenated file: $error")
+//          case Right(_) =>
+//            logger.info("Concatenated file created successfully.")
+//        }
+//    }
+
     urls match {
       case Left(error) =>
         logger.error(s"Error loading URLs: $error")
       case Right(urlList) =>
-        createConcatenatedFile(urlList, outputDir, outputFileName) match {
-          case Left(error) =>
-            logger.error(s"Error creating concatenated file: $error")
-          case Right(_) =>
-            logger.info("Concatenated file created successfully.")
+        val success = createConcatenatedFileWithConcurrency(urlList, outputDir, outputFileName)
+        if (success) {
+          logger.info("Concatenated file created successfully.")
+        } else {
+          logger.error("Failed to create concatenated file.")
         }
     }
+
+  }
+
+  def createConcatenatedFileWithConcurrency(urls: List[String], outputDir: String, outputFileName: String): Boolean = {
+    val outputDirectory = new File(outputDir)
+    if (!outputDirectory.exists()) {
+      outputDirectory.mkdirs()
+    }
+    val outputFile = new File(outputDir + outputFileName)
+
+    val semaphore = new Semaphore(3) // Limit concurrency to a maximum of 3 active downloads
+    implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(Executors.newCachedThreadPool())
+
+    val futures = urls.map { url =>
+      Future {
+        semaphore.acquire()
+        try {
+          logger.info(s"Downloading URL: $url")
+          downloadFile(url) match {
+            case Left(error) =>
+              logger.error(s"Failed to download $url: $error")
+              ""
+            case Right(localFile) =>
+              readFile(localFile) match {
+                case Left(error) =>
+                  logger.error(s"Failed to read file for $url: $error")
+                  ""
+                case Right(content) =>
+                  logger.info(s"Successfully read content from $url")
+                  content
+              }
+          }
+        } finally {
+          semaphore.release()
+        }
+      }
+    }
+
+    //
+    val combinedFuture = Future.sequence(futures)
+
+    combinedFuture.onComplete {
+      case Success(contents) =>
+        val concatenatedContent = contents.mkString("\n")
+        writeToFile(outputFile, concatenatedContent) match {
+          case Left(error) =>
+            logger.error(s"Failed to write to output file: $error")
+          case Right(_) =>
+            logger.info(s"Output file created at: ${outputFile.getAbsolutePath}")
+        }
+      case Failure(exception) =>
+        logger.error(s"Error during execution: ${exception.getMessage}")
+    }
+
+    combinedFuture.foreach(_ => ())
+
+    combinedFuture.isCompleted
   }
 
   def createConcatenatedFile(urls: List[String], outputDir: String, outputFileName: String): Either[String, Unit] = {
