@@ -3,7 +3,7 @@ package ltd.kalai.les.assignments
 import org.slf4j.LoggerFactory
 import org.yaml.snakeyaml.Yaml
 
-import java.io.{File, FileNotFoundException, InputStream}
+import java.io.*
 import java.net.URI
 import java.nio.file.{Files, Paths, StandardCopyOption}
 import scala.io.Source
@@ -15,24 +15,42 @@ object ReadFileFromUrl {
 
   def main(args: Array[String]): Unit = {
 
+    val outputDir = "/Users/shan/http/docs/"
+    val outputFileName = "concatenated_output.txt"
     val urls = loadUrlsFromYaml("urls.yaml")
 
-    urls.foreach { url =>
-      logger.info(s"Processing URL: $url")
-      try {
-        val localFile = downloadFile(url)
-        logger.info(s"Downloaded file from $url to ${localFile.getAbsolutePath}")
-        val source = Source.fromFile(localFile)
-        try {
-          source.getLines().foreach(line => logger.info(s"Lines from $url: $line"))
-        } finally {
-          source.close()
-        }
-        logger.info(s"Successfully read from URL: $url")
-      } catch
-        case e: Exception =>
-          logger.error(s"Failed to read from $url: ${e.getMessage}")
+    val outputDirectory = new File(outputDir)
+    if (!outputDirectory.exists()) {
+      outputDirectory.mkdirs()
     }
+    val outputFile = new File(outputDir + outputFileName)
+
+    try {
+
+      val concatenatedContent = urls.map { url =>
+        logger.info(s"Processing URL: $url")
+        try {
+          val localFile = downloadFile(url)
+          logger.info(s"Downloaded file from $url to ${localFile.getAbsolutePath}")
+          val source = Source.fromFile(localFile)
+          try {
+            val content = source.mkString
+            logger.info(s"Successfully read content from: ${localFile.getName}")
+            content
+          } finally {
+            source.close()
+          }
+        } catch
+          case e: Exception =>
+            logger.error(s"Failed to read from $url: ${e.getMessage}")
+      }.mkString("\n")
+
+      writeToFile(outputFile, concatenatedContent)
+
+    } catch
+      case e: Exception =>
+        logger.error(s"Failed to concatenate files: ${e.getMessage}")
+
   }
 
   private def loadUrlsFromYaml(fileName: String): List[String] = {
@@ -65,6 +83,15 @@ object ReadFileFromUrl {
         throw new RuntimeException(s"Invalid URL syntax: $fileUrl", e)
       case e: java.io.IOException =>
         throw new RuntimeException(s"Failed to download file from $fileUrl: ${e.getMessage}", e)
+  }
+
+  private def writeToFile(outputFile: File, content: String): Unit = {
+    val writer = new BufferedWriter(new FileWriter(outputFile))
+    try {
+      writer.write(content)
+    } finally {
+      writer.close()
+    }
   }
 
 }
