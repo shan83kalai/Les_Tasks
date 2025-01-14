@@ -8,6 +8,7 @@ import org.scalatestplus.mockito.MockitoSugar
 import org.slf4j.Logger
 
 import java.io.{File, FileWriter}
+import scala.io.Source
 import scala.io.Source.fromFile
 import scala.util.Using
 
@@ -23,14 +24,13 @@ class ReadFileFromUrlTest extends AnyFunSuite with Matchers with MockitoSugar {
         |""".stripMargin
 
     val tempYamlFile = File.createTempFile("testUrls", ".yaml")
-    val writer = new java.io.FileWriter(tempYamlFile)
-    writer.write(yamlContent)
-    writer.close()
+    Using(new FileWriter(tempYamlFile)) { writer =>
+      writer.write(yamlContent)
+    }
 
-    val urls = ReadFileFromUrl.loadUrlsFromYaml(tempYamlFile.getAbsolutePath, false)
-    urls.size shouldBe 2
-    urls.head shouldBe "http://localhost:9090/docs/File_1.txt"
-    urls.last shouldBe "http://localhost:9090/docs/File_2.txt"
+    val urls = ReadFileFromUrl.loadUrlsFromYaml(tempYamlFile.getAbsolutePath, isClasspathResource = false)
+
+    urls shouldBe Right(List("http://localhost:9090/docs/File_1.txt", "http://localhost:9090/docs/File_2.txt"))
     tempYamlFile.delete()
   }
 
@@ -39,33 +39,38 @@ class ReadFileFromUrlTest extends AnyFunSuite with Matchers with MockitoSugar {
     val invalidYamlContent = ""
 
     val tempYamlFile = File.createTempFile("testUrls", ".yaml")
-    val writer = new java.io.FileWriter(tempYamlFile)
-    writer.write(invalidYamlContent)
-    writer.close()
+    Using(new FileWriter(tempYamlFile)) { writer =>
+      writer.write(invalidYamlContent)
+    }
 
-    val urls = ReadFileFromUrl.loadUrlsFromYaml(tempYamlFile.getAbsolutePath, false)
-    urls shouldBe empty
+    val urls = ReadFileFromUrl.loadUrlsFromYaml(tempYamlFile.getAbsolutePath, isClasspathResource = false)
+    urls.isLeft shouldBe true
+    urls.swap.getOrElse("") should include("Failed to load URLs from")
     tempYamlFile.delete()
   }
 
   test("loadUrlsFromYaml should return an empty list if the YAML file does not exist") {
-    val urls = ReadFileFromUrl.loadUrlsFromYaml("invalid_file.yaml", false)
-    urls shouldBe empty
+    val urls = ReadFileFromUrl.loadUrlsFromYaml("invalid_file.yaml", isClasspathResource = false)
+    urls.isLeft shouldBe true
+    urls.swap.getOrElse("") should include("Failed to load URLs from")
   }
 
   test("downloadFile should download a file") {
     val tempFile = File.createTempFile("testFile", ".txt")
     val fileContent = "Test file content"
-    val writer = new FileWriter(tempFile)
-    writer.write(fileContent)
-    writer.close()
+    Using(new FileWriter(tempFile)) { writer =>
+      writer.write(fileContent)
+    }
 
     val mockUrl = tempFile.toURI.toURL.toString
     val downloadedFile = ReadFileFromUrl.downloadFile(mockUrl)
 
-    downloadedFile.exists() shouldBe true
-    downloadedFile.length() shouldBe fileContent.length
-    downloadedFile.delete()
+    downloadedFile.isRight shouldBe true
+    val downloadedFileContent = downloadedFile.toOption.get
+    downloadedFileContent.exists() shouldBe true
+    downloadedFileContent.length() shouldBe fileContent.length
+    downloadedFileContent.delete()
+    tempFile.delete()
   }
 
   test("downloadFile should throw an exception if the URL is invalid") {
@@ -79,14 +84,23 @@ class ReadFileFromUrlTest extends AnyFunSuite with Matchers with MockitoSugar {
   test("writeToFile should write content to a file") {
     val tempFile = File.createTempFile("testFile", ".txt")
     val fileContent = "Test file content"
-    val writer = new FileWriter(tempFile)
-    writer.write(fileContent)
-    writer.close()
+    Using(new FileWriter(tempFile)) { writer =>
+      writer.write(fileContent)
+    }
 
-    ReadFileFromUrl.writeToFile(tempFile, fileContent)
+    val result = ReadFileFromUrl.writeToFile(tempFile, fileContent)
+    result.isRight shouldBe true
     tempFile.exists() shouldBe true
     tempFile.length() shouldBe fileContent.length
     tempFile.delete()
+  }
+
+  test("writeToFile should handle errors during writing") {
+    val invalidFile = new File("$invalid:/path/to/file.txt")
+    val result = ReadFileFromUrl.writeToFile(invalidFile, "Some content")
+
+    result.isLeft shouldBe true
+    result.swap.getOrElse("") should include("Failed to write")
   }
 
   test("createConcatenatedFile should concatenate files from multiple URLs") {
@@ -104,22 +118,22 @@ class ReadFileFromUrlTest extends AnyFunSuite with Matchers with MockitoSugar {
     val mockUrl1 = mockLocalFile1.toURI.toURL.toString
     val mockUrl2 = mockLocalFile2.toURI.toURL.toString
 
-    val writer1 = new FileWriter(mockLocalFile1)
-    writer1.write(fileContent1)
-    writer1.close()
-
-    val writer2 = new FileWriter(mockLocalFile2)
-    writer2.write(fileContent2)
-    writer2.close()
+    Using(new FileWriter(mockLocalFile1)) { writer =>
+      writer.write(fileContent1)
+    }
+    Using(new FileWriter(mockLocalFile2)) { writer =>
+      writer.write(fileContent2)
+    }
 
     val mockedFileDownloader = mock[ReadFileFromUrl.type]
-    when(mockedFileDownloader.downloadFile(mockUrl1)).thenReturn(mockLocalFile1)
-    when(mockedFileDownloader.downloadFile(mockUrl2)).thenReturn(mockLocalFile2)
+    when(mockedFileDownloader.downloadFile(mockUrl1)).thenReturn(Right(mockLocalFile1))
+    when(mockedFileDownloader.downloadFile(mockUrl2)).thenReturn(Right(mockLocalFile2))
 
     val mockedLogger = mock[Logger]
 
     usingMockedDependencies(mockedFileDownloader, mockedLogger) {
-      ReadFileFromUrl.createConcatenatedFile(urls, outputDir, outputFileName)
+      val result = ReadFileFromUrl.createConcatenatedFile(urls, outputDir, outputFileName)
+      result.isRight shouldBe true
       val concatenatedFile = new File(outputDir + outputFileName)
       concatenatedFile.exists() shouldBe true
       concatenatedFile.length() shouldBe (fileContent1 + fileContent2).length
@@ -129,7 +143,7 @@ class ReadFileFromUrlTest extends AnyFunSuite with Matchers with MockitoSugar {
       fileContent shouldBe (fileContent1 + fileContent2)
       concatenatedFile.delete()
     }
-    
+
   }
 
   test("createConcatenatedFile should handle empty URLs list") {
@@ -150,7 +164,7 @@ class ReadFileFromUrlTest extends AnyFunSuite with Matchers with MockitoSugar {
 
     val mockedFileDownloader = mock[ReadFileFromUrl.type]
     val mockedLogger = mock[Logger]
-    
+
     when(mockedFileDownloader.downloadFile(anyString())).thenThrow(new RuntimeException("Failed to download file"))
 
     usingMockedDependencies(mockedFileDownloader, mockedLogger) {

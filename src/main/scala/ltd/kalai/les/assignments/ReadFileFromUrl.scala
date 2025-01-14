@@ -19,48 +19,43 @@ object ReadFileFromUrl {
     val outputFileName = "concatenated_output.txt"
     val urls = loadUrlsFromYaml("urls.yaml", true)
 
-    createConcatenatedFile(urls, outputDir, outputFileName)
+    urls match {
+      case Left(error) =>
+        logger.error(s"Error loading URLs: $error")
+      case Right(urlList) =>
+        createConcatenatedFile(urlList, outputDir, outputFileName) match {
+          case Left(error) =>
+            logger.error(s"Error creating concatenated file: $error")
+          case Right(_) =>
+            logger.info("Concatenated file created successfully.")
+        }
+    }
   }
 
-  def createConcatenatedFile(urls: List[String], outputDir: String, outputFileName: String): Unit = {
-    val logger = LoggerFactory.getLogger(this.getClass)
-
+  def createConcatenatedFile(urls: List[String], outputDir: String, outputFileName: String): Either[String, Unit] = {
     val outputDirectory = new File(outputDir)
     if (!outputDirectory.exists()) {
       outputDirectory.mkdirs()
     }
-
     val outputFile = new File(outputDir + outputFileName)
 
-    try {
-      val concatenatedContent = urls.map { url =>
-        logger.info(s"Processing URL: $url")
-        try {
-          val localFile = downloadFile(url)
-          logger.info(s"Downloaded file from $url to ${localFile.getAbsolutePath}")
-          val source = Source.fromFile(localFile)
-          try {
-            val content = source.mkString
-            logger.info(s"Successfully read content from: ${localFile.getName}")
-            content
-          } finally {
-            source.close()
-          }
-        } catch {
-          case e: Exception =>
-            logger.error(s"Failed to read from $url: ${e.getMessage}")
-            ""
+    val concatenatedContent = urls.map { url =>
+      logger.info(s"Processing URL: $url")
+      downloadFile(url).flatMap { localFile =>
+        readFile(localFile).map { content =>
+          logger.info(s"Successfully read content from: ${localFile.getName}")
+          content
         }
-      }.mkString("\n")
+      }.left.map { error =>
+        logger.error(s"failed to process from $url: $error")
+        ""
+      }.merge
+    }.mkString("\n")
 
-      writeToFile(outputFile, concatenatedContent)
-    } catch {
-      case e: Exception =>
-        logger.error(s"Failed to concatenate files: ${e.getMessage}")
-    }
+    writeToFile(outputFile, concatenatedContent)
   }
 
-  def loadUrlsFromYaml(fileName: String, isClasspathResource: Boolean): List[String] = {
+  def loadUrlsFromYaml(fileName: String, isClasspathResource: Boolean): Either[String, List[String]] = {
 
     val yaml = new Yaml()
     var inputStream: InputStream = null
@@ -78,14 +73,13 @@ object ReadFileFromUrl {
 
       val data = yaml.load(inputStream).asInstanceOf[java.util.Map[String, java.util.List[String]]]
       inputStream.close()
-      data.get("urls").asScala.toList
+      Right(data.get("urls").asScala.toList)
     } catch
       case e: Exception =>
-        logger.error(s"Failed to load URLs from $fileName: ${e.getMessage}")
-        List.empty
+        Left(s"Failed to load URLs from $fileName: ${e.getMessage}")
   }
 
-  def downloadFile(fileUrl: String): File = {
+  def downloadFile(fileUrl: String): Either[String, File] = {
     try {
       val url = new URI(fileUrl)
       val utl = url.toURL
@@ -93,23 +87,41 @@ object ReadFileFromUrl {
       val tempDir = Files.createTempDirectory("downloaded_files")
       val localFilePath = tempDir.resolve(fileName)
       Files.copy(utl.openStream(), localFilePath, StandardCopyOption.REPLACE_EXISTING)
-      new File(localFilePath.toString)
+      Right(new File(localFilePath.toString))
     } catch
       case e: java.net.URISyntaxException =>
-        throw new RuntimeException(s"Invalid URL syntax: $fileUrl", e)
+        Left(s"Invalid URL syntax: $fileUrl: ${e.getMessage}")
       case e: java.io.IOException =>
-        throw new RuntimeException(s"Failed to download file from $fileUrl: ${e.getMessage}", e)
+        Left(s"Failed to download file from $fileUrl: ${e.getMessage}")
   }
 
-  def writeToFile(outputFile: File, content: String): Unit = {
-    val writer = new BufferedWriter(new FileWriter(outputFile))
+  def writeToFile(outputFile: File, content: String): Either[String, Unit] = {
     try {
-      writer.write(content)
-    } finally {
-      writer.close()
+      val writer = new BufferedWriter(new FileWriter(outputFile))
+      try {
+        writer.write(content)
+        Right(())
+      } finally {
+        writer.close() // Ensure the writer is closed properly
+      }
+    } catch {
+      case e: Exception =>
+        Left(s"Failed to write to file: ${e.getMessage}")
     }
   }
 
-
+  def readFile(file: File): Either[String, String] = {
+    try {
+      val source = Source.fromFile(file)
+      try {
+        Right(source.mkString)
+      } finally {
+        source.close()
+      }
+    } catch {
+      case e: Exception =>
+        Left(s"Failed to read from file ${file.getAbsolutePath}: ${e.getMessage}")
+    }
+  }
 
 }
