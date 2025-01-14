@@ -18,32 +18,47 @@ object ReadFileFromUrl {
 
   def main(args: Array[String]): Unit = {
 
+    val startTime = System.currentTimeMillis()
+
     val outputDir = "/Users/shan/http/docs/"
     val outputFileName = "concatenated_output.txt"
     val urls = loadUrlsFromYaml("urls.yaml", true)
-
-//    urls match {
-//      case Left(error) =>
-//        logger.error(s"Error loading URLs: $error")
-//      case Right(urlList) =>
-//        createConcatenatedFile(urlList, outputDir, outputFileName) match {
-//          case Left(error) =>
-//            logger.error(s"Error creating concatenated file: $error")
-//          case Right(_) =>
-//            logger.info("Concatenated file created successfully.")
-//        }
-//    }
 
     urls match {
       case Left(error) =>
         logger.error(s"Error loading URLs: $error")
       case Right(urlList) =>
-        val success = createConcatenatedFileWithConcurrency(urlList, outputDir, outputFileName)
-        if (success) {
-          logger.info("Concatenated file created successfully.")
-        } else {
-          logger.error("Failed to create concatenated file.")
+        createConcatenatedFile(urlList, outputDir, outputFileName) match {
+          case Left(error) =>
+            logger.error(s"Error creating concatenated file: $error")
+          case Right(_) =>
+            logger.info("Concatenated file created successfully.")
+            val endTime = System.currentTimeMillis()
+            val timeTaken = endTime - startTime
+            logger.info(s"Time taken for execution: ${timeTaken}ms")
+
         }
+    }
+
+    val concurrencyStartTime = System.currentTimeMillis()
+    try {
+      urls match {
+        case Left(error) =>
+          logger.error(s"Error loading URLs: $error")
+        case Right(urlList) =>
+          val success = createConcatenatedFileWithConcurrency(urlList, outputDir, outputFileName)
+          if (success) {
+            logger.info("Concatenated file created successfully.")
+          } else {
+            logger.error("Failed to create concatenated file.")
+          }
+      }
+    }
+    finally
+    {
+      val endTime = System.currentTimeMillis()
+      val timeTaken = endTime - concurrencyStartTime
+      logger.info(s"Time taken for execution with Concurrency: ${timeTaken}ms")
     }
 
   }
@@ -55,7 +70,7 @@ object ReadFileFromUrl {
     }
     val outputFile = new File(outputDir + outputFileName)
 
-    val semaphore = new Semaphore(3) // Limit concurrency to a maximum of 3 active downloads
+    val semaphore = new Semaphore(9) // Limit concurrency to a maximum of 3 active downloads
     implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(Executors.newCachedThreadPool())
 
     val futures = urls.map { url =>
