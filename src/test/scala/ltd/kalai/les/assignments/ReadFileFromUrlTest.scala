@@ -29,7 +29,6 @@ class ReadFileFromUrlTest extends AnyFunSuite with Matchers with MockitoSugar {
     }
 
     val urls = ReadFileFromUrl.loadUrlsFromYaml(tempYamlFile.getAbsolutePath, isClasspathResource = false)
-
     urls shouldBe Right(List("http://localhost:9090/docs/File_1.txt", "http://localhost:9090/docs/File_2.txt"))
     tempYamlFile.delete()
   }
@@ -57,6 +56,7 @@ class ReadFileFromUrlTest extends AnyFunSuite with Matchers with MockitoSugar {
 
   test("downloadFile should download a file") {
     val tempFile = File.createTempFile("testFile", ".txt")
+    tempFile.deleteOnExit()
     val fileContent = "Test file content"
     Using(new FileWriter(tempFile)) { writer =>
       writer.write(fileContent)
@@ -70,7 +70,6 @@ class ReadFileFromUrlTest extends AnyFunSuite with Matchers with MockitoSugar {
     downloadedFileContent.exists() shouldBe true
     downloadedFileContent.length() shouldBe fileContent.length
     downloadedFileContent.delete()
-    tempFile.delete()
   }
 
   test("downloadFile should throw an exception if the URL is invalid") {
