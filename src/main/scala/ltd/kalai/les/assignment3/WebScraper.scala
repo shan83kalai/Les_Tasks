@@ -10,11 +10,15 @@ import scala.jdk.CollectionConverters.CollectionHasAsScala
 import scala.util.{Failure, Success, Try}
 
 object WebScraper {
+  private val visitedUrlsCache = java.util.Collections.synchronizedSet(new java.util.HashSet[String]())
 
   private case class LinkInfo(url: String, text: String)
   private def normalizeURL(url: String): String = URINormalizer.normalizeURL(url).getOrElse(url)
 
   private def extractLinks(url: String): Either[String, List[LinkInfo]] = {
+    if (!visitedUrlsCache.add(url)) {
+      return Right(List.empty)
+    }
     Try {
       val doc: Document = Jsoup.connect(url)
         .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
@@ -59,8 +63,8 @@ object WebScraper {
   }
 
   def main(args: Array[String]): Unit = {
-//    val targetUrl = "https://meet.google.com/landing"
-    val targetUrl = "https://www.bbc.co.uk"
+    val targetUrl = "https://www.gov.uk"
+//    val targetUrl = "https://www.bbc.co.uk"
     val outputFile = "extracted_links.csv"
 
     println(s"Starting link extraction from: $targetUrl")
@@ -74,11 +78,28 @@ object WebScraper {
         }
 
         saveLinksToFile(links, outputFile) match {
-          case Right(_) => println(s"\nLinks have been saved to $outputFile")
+          case Right(_) =>
+            println(s"\nLinks have been saved to $outputFile")
+            println("\nStarting to recursively extract links from found links. Please wait...")
+            recursivelyExtractLinks(links, outputFile)
           case Left(error) => println(s"\nError saving file: $error")
         }
       case Left(error) => println(s"Error: $error")
     }
   }
-
+  private def recursivelyExtractLinks(links: List[LinkInfo], outputFile: String): Unit = {
+    links.foreach { link =>
+      extractLinks(link.url) match {
+        case Right(nestedLinks) =>
+          println(s"Extracted ${nestedLinks.size} links from ${link.url}")
+          saveLinksToFile(nestedLinks, outputFile) match {
+            case Right(_) => println(s"Links from ${link.url} saved to $outputFile")
+            case Left(error) => println(s"Error saving links from ${link.url}: $error")
+          }
+          recursivelyExtractLinks(nestedLinks, outputFile)
+        case Left(error) =>
+          println(s"Error extracting links from ${link.url}: $error")
+      }
+    }
+  }
 }
