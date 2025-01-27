@@ -14,6 +14,7 @@ lazy val root = (project in file("."))
       "org.yaml" % "snakeyaml" % "2.3",
       "com.google.code.gson" % "gson" % "2.11.0",
       "org.jsoup" % "jsoup" % "1.18.3",
+      "com.google.guava" % "guava" % "33.4.0-jre",
       "org.scalatest" %% "scalatest" % "3.2.19" % Test,
       "org.scalatestplus" %% "mockito-5-12" % "3.2.19.0" % Test
     )
