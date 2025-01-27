@@ -3,7 +3,7 @@ package ltd.kalai.les.assignment3
 import java.net.URI
 import scala.util.Try
 
-object URLNormalizer {
+object URINormalizer {
 
   def normalizeURL(url: String): Option[String] = {
     Try(new URI(url)).toOption.map { parsedUri =>

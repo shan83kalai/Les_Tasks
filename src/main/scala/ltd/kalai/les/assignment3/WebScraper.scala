@@ -12,7 +12,7 @@ import scala.util.{Failure, Success, Try}
 object WebScraper {
 
   private case class LinkInfo(url: String, text: String)
-  private def normalizeURL(url: String): String = URLNormalizer.normalizeURL(url).getOrElse(url)
+  private def normalizeURL(url: String): String = URINormalizer.normalizeURL(url).getOrElse(url)
 
   private def extractLinks(url: String): Either[String, List[LinkInfo]] = {
     Try {
