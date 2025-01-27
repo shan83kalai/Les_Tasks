@@ -30,8 +30,9 @@ object WebScraper {
           element.text().trim
         ))
         .filter(link => link.url.nonEmpty && link.url.startsWith("http"))
+        .groupBy(_.url)
+        .map { case (url, linkInfos) => linkInfos.head }
         .toList
-        .distinct
     } match {
       case Success(links) => Right(links)
       case Failure(ex) => Left(s"Error extracting links: ${ex.getMessage}")
