@@ -12,6 +12,7 @@ import scala.util.{Failure, Success, Try}
 object WebScraper {
 
   private case class LinkInfo(url: String, text: String)
+  private def normalizeURL(url: String): String = URLNormalizer.normalizeURL(url).getOrElse(url)
 
   private def extractLinks(url: String): Either[String, List[LinkInfo]] = {
     Try {
@@ -25,7 +26,7 @@ object WebScraper {
 
       links.asScala
         .map(element => LinkInfo(
-          element.attr("abs:href").trim,
+          normalizeURL(element.attr("abs:href").trim),
           element.text().trim
         ))
         .filter(link => link.url.nonEmpty && link.url.startsWith("http"))
@@ -43,7 +44,7 @@ object WebScraper {
       try {
         writer.println("URL,Text")
         links.foreach { link =>
-          val escapedUrl = link.url.replace("\"", "\"\"")
+          val escapedUrl = normalizeURL(link.url).replace("\"", "\"\"")
           val escapedText = link.text.replace("\"", "\"\"")
           writer.println(s""""$escapedUrl","$escapedText"""")
         }
