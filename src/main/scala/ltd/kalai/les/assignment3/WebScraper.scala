@@ -65,7 +65,7 @@ object WebScraper {
     println("Please wait...")
 
     extractLinks(targetUrl) match {
-      case Right(links) => {
+      case Right(links) =>
         println(s"\nFound ${links.size} links:")
         links.zipWithIndex.foreach { case (link, index) =>
           println(s"${index + 1}. ${link.url} - ${link.text}")
@@ -75,7 +75,6 @@ object WebScraper {
           case Right(_) => println(s"\nLinks have been saved to $outputFile")
           case Left(error) => println(s"\nError saving file: $error")
         }
-      }
       case Left(error) => println(s"Error: $error")
     }
   }
