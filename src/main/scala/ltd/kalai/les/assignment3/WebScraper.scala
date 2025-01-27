@@ -1,5 +1,6 @@
 package ltd.kalai.les.assignment3
 
+import com.google.common.cache.{Cache, CacheBuilder}
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.select.Elements
@@ -10,15 +11,23 @@ import scala.jdk.CollectionConverters.CollectionHasAsScala
 import scala.util.{Failure, Success, Try}
 
 object WebScraper {
-  private val visitedUrlsCache = java.util.Collections.synchronizedSet(new java.util.HashSet[String]())
+
+  private val visitedUrlsCache: Cache[String, Boolean] =
+    CacheBuilder.newBuilder()
+      .expireAfterAccess(15, java.util.concurrent.TimeUnit.MINUTES)
+      .maximumSize(100000)
+      .build()
 
   private case class LinkInfo(url: String, text: String)
+
   private def normalizeURL(url: String): String = URINormalizer.normalizeURL(url).getOrElse(url)
 
   private def extractLinks(url: String): Either[String, List[LinkInfo]] = {
-    if (!visitedUrlsCache.add(url)) {
+    if (Option(visitedUrlsCache.getIfPresent(url)).nonEmpty) {
       return Right(List.empty)
     }
+    visitedUrlsCache.put(url, true) // Mark as visited
+
     Try {
       val doc: Document = Jsoup.connect(url)
         .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
@@ -35,14 +44,16 @@ object WebScraper {
         ))
         .filter(link => link.url.nonEmpty && link.url.startsWith("http"))
         .groupBy(_.url)
-        .map { case (url, linkInfos) => linkInfos.head }
+        .map { case (_, linkInfos) => linkInfos.head }
         .toList
     } match {
+      // Return the extracted links or an error
       case Success(links) => Right(links)
       case Failure(ex) => Left(s"Error extracting links: ${ex.getMessage}")
     }
   }
 
+  // Function to save links to a file
   private def saveLinksToFile(links: List[LinkInfo], filename: String): Either[String, Unit] = {
     Try {
       val writer = new PrintWriter(new File(filename), StandardCharsets.UTF_8.name())
@@ -64,7 +75,6 @@ object WebScraper {
 
   def main(args: Array[String]): Unit = {
     val targetUrl = "https://www.gov.uk"
-//    val targetUrl = "https://www.bbc.co.uk"
     val outputFile = "extracted_links.csv"
 
     println(s"Starting link extraction from: $targetUrl")
@@ -87,6 +97,7 @@ object WebScraper {
       case Left(error) => println(s"Error: $error")
     }
   }
+
   private def recursivelyExtractLinks(links: List[LinkInfo], outputFile: String): Unit = {
     links.foreach { link =>
       extractLinks(link.url) match {
@@ -102,4 +113,5 @@ object WebScraper {
       }
     }
   }
+
 }
