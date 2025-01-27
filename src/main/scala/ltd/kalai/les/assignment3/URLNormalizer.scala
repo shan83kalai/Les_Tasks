@@ -1,24 +1,26 @@
 package ltd.kalai.les.assignment3
 
-import java.net.{URL, URLEncoder}
-import java.util.Comparator
+import java.net.URI
 import scala.util.Try
 
 object URLNormalizer {
 
   def normalizeURL(url: String): Option[String] = {
-    Try(new URL(url)).toOption.map { parsedUrl =>
-      val protocol = parsedUrl.getProtocol.toLowerCase
-      val host = parsedUrl.getHost.toLowerCase
-      val port = parsedUrl.getPort match {
-        case -1 => "" // Default ports will be omitted
+    Try(new URI(url)).toOption.map { parsedUri =>
+
+      val protocol = parsedUri.getScheme.toLowerCase
+
+      val host = parsedUri.getHost.toLowerCase
+
+      val port = parsedUri.getPort match {
+        case -1 => ""
         case p => s":$p"
       }
-      val path = Option(parsedUrl.getPath)
-        .map(_.replaceAll("/+", "/")) // Remove duplicate slashes
+      val path = Option(parsedUri.getPath)
+        .map(_.replaceAll("/+", "/"))
         .map(_.replaceAll("index\\.html$", "")) // Remove "index.html" at the end
         .getOrElse("")
-      val query = Option(parsedUrl.getQuery)
+      val query = Option(parsedUri.getQuery)
         .map(_.split("&").sorted.mkString("&")) // Sort query parameters alphabetically
         .map(q => s"?$q")
         .getOrElse("")
