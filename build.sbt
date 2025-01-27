@@ -13,6 +13,7 @@ lazy val root = (project in file("."))
       "ch.qos.logback" % "logback-classic" % "1.5.16",
       "org.yaml" % "snakeyaml" % "2.3",
       "com.google.code.gson" % "gson" % "2.11.0",
+      "org.jsoup" % "jsoup" % "1.18.3",
       "org.scalatest" %% "scalatest" % "3.2.19" % Test,
       "org.scalatestplus" %% "mockito-5-12" % "3.2.19.0" % Test
     )
