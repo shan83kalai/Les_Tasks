@@ -76,12 +76,13 @@ object WebScraper {
     val targetUrl = "https://www.gov.uk"
     val outputFile = "extracted_links.csv"
 
-    println(s"Starting link extraction from: $targetUrl")
-    println("Please wait...")
+    val startTime = System.currentTimeMillis()
+    logger.info(s"Starting link extraction from: $targetUrl at ${new java.util.Date(startTime)}")
+    logger.info("Please wait...")
 
     extractLinks(targetUrl) match {
       case Right(initialLinks) =>
-        println(s"\nFound ${initialLinks.size} links from the root URL.")
+        logger.info(s"Found ${initialLinks.size} links from the root URL.")
         addLinks(initialLinks)
 
         val future = recursivelyExtractLinksParallel(initialLinks)
@@ -89,12 +90,25 @@ object WebScraper {
 
         saveLinksToFile(allLinks.toList, outputFile) match {
           case Right(_) =>
-            println(s"\nTotal ${totalUrls.get()} links saved to $outputFile")
+            logger.info(s"Total ${totalUrls.get()} links saved to $outputFile")
           case Left(error) =>
-            println(s"\nError saving file: $error")
+            logger.error(s"Error saving file: $error")
         }
       case Left(error) =>
-        println(s"Error: $error")
+        logger.error(s"Error: $error")
+    }
+
+    val endTime = System.currentTimeMillis()
+    logger.info(s"Completed link extraction at ${new java.util.Date(endTime)}")
+
+    val totalTimeMillis = endTime - startTime
+    val totalTimeMinutes = totalTimeMillis / 60000
+    val totalTimeSeconds = (totalTimeMillis % 60000) / 1000
+
+    if (totalTimeMinutes > 1) {
+      logger.info(s"Total time taken: $totalTimeMinutes minutes")
+    } else {
+      logger.info(s"Total time taken: $totalTimeSeconds seconds")
     }
   }
 
