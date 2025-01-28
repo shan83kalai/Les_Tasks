@@ -26,6 +26,7 @@ object WebScraper {
   private val logger = LoggerFactory.getLogger(this.getClass)
   private val totalUrls = new AtomicInteger(0)
   private val allLinks = scala.collection.mutable.Set[LinkInfo]()
+  private val totalExpectedCount = 100000
 
   implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(
     Executors.newFixedThreadPool(Runtime.getRuntime.availableProcessors())
@@ -114,7 +115,7 @@ object WebScraper {
 
   private def addLinks(links: List[LinkInfo]): Unit = synchronized {
     links.foreach { link =>
-      if (Option(visitedUrlsCache.getIfPresent(link.url)).isEmpty && totalUrls.get() < 1000000) {
+      if (Option(visitedUrlsCache.getIfPresent(link.url)).isEmpty && totalUrls.get() < totalExpectedCount) {
         allLinks.add(link)
         totalUrls.incrementAndGet()
       }
@@ -124,7 +125,7 @@ object WebScraper {
   private def recursivelyExtractLinksParallel(links: List[LinkInfo])(implicit ec: ExecutionContext): Future[Unit] = {
     logger.debug(s"Recursively processing ${links.size} links...")
 
-    if (totalUrls.get() >= 10000) {
+    if (totalUrls.get() >= totalExpectedCount) {
       logger.info(s"Stopping recursion as total limit (${totalUrls.get()}) is reached.")
       return Future.successful(())
     }
@@ -148,7 +149,7 @@ object WebScraper {
       logger.info(s"Found ${combinedResults.size} new links for processing.")
       addLinks(combinedResults)
 
-      if (combinedResults.nonEmpty && totalUrls.get() < 1000000) {
+      if (combinedResults.nonEmpty && totalUrls.get() < totalExpectedCount) {
         recursivelyExtractLinksParallel(combinedResults)
       } else {
         logger.info("No more links to process or limit reached.")
