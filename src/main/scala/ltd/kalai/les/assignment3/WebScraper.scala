@@ -26,10 +26,10 @@ object WebScraper {
   private val logger = LoggerFactory.getLogger(this.getClass)
   private val totalUrls = new AtomicInteger(0)
   private val allLinks = scala.collection.mutable.Set[LinkInfo]()
-  private val totalExpectedCount = 100000
+  private val totalExpectedCount = 1000000
 
   implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(
-    Executors.newFixedThreadPool(Runtime.getRuntime.availableProcessors())
+    Executors.newFixedThreadPool(2 * Runtime.getRuntime.availableProcessors() * 50)
   )
 
   private case class LinkInfo(url: String, text: String)
