@@ -1,37 +1,17 @@
 package ltd.kalai.les.assignment4
 
 import java.io._
+import org.apache.tika.Tika
 
 object ImageFileChecker {
 
-  def getFileSignature(file: File): Option[String] = {
-    val buffer = new Array[Byte](4)
-    val inputStream = new FileInputStream(file)
-    try {
-      if (inputStream.read(buffer) == -1) None
-      else Some(buffer.map(b => f"$b%02X").mkString)
-    } finally {
-      inputStream.close()
-    }
-  }
-
-  def isImageBySignature(file: File): Boolean = {
-    val imageSignatures = Set(
-      "FFD8FF", // JPEG
-      "89504E47", // PNG
-      "47494638", // GIF
-      "49492A00", // TIFF (little-endian)
-      "4D4D002A", // TIFF (big-endian)
-      "424D" // BMP
-    )
-    getFileSignature(file).exists(sig => imageSignatures.exists(sig.startsWith))
-  }
+  private val tika = new Tika()
 
   def isImage(file: File): Boolean = {
-    val imageExtensions = Set("jpg", "jpeg", "png", "gif", "bmp", "tiff", "webp", "heic", "heif")
-    file.isFile &&
-      imageExtensions.exists(file.getName.toLowerCase.endsWith) &&
-      isImageBySignature(file)
+    file.isFile && {
+      val mimeType = tika.detect(file)
+      mimeType.startsWith("image/")
+    }
   }
 
   def listFiles(dir: File): List[File] = {
