@@ -2,10 +2,13 @@ package ltd.kalai.les.assignment4
 
 import java.io._
 import org.apache.tika.Tika
+import dev.brachtendorf.jimagehash.hashAlgorithms.DifferenceHash
+import javax.imageio.ImageIO
 
 object ImageFileChecker {
 
   private val tika = new Tika()
+  private val hashAlgorithm = new DifferenceHash(64, DifferenceHash.Precision.Simple)
 
   def isImage(file: File): Boolean = {
     file.isFile && {
@@ -36,8 +39,19 @@ object ImageFileChecker {
     if (imageFiles.isEmpty) {
       println("No image files found.")
     } else {
-      println("Image files found:")
-      imageFiles.foreach(file => println(file.getAbsolutePath))
+      println("Image files and their perceptual hashes:")
+
+      imageFiles.foreach { file =>
+        val hash = computePerceptualHash(file)
+        println(s"${file.getAbsolutePath} -> $hash")
+      }
     }
   }
+
+  private def computePerceptualHash(file: File): String = {
+    val bufferedImage = ImageIO.read(file)
+    val hash = hashAlgorithm.hash(bufferedImage)
+    hash.toString
+  }
+
 }
