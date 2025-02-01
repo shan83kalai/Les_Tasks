@@ -1,12 +1,37 @@
 package ltd.kalai.les.assignment4
 
-import java.io.File
+import java.io._
 
 object ImageFileChecker {
 
+  def getFileSignature(file: File): Option[String] = {
+    val buffer = new Array[Byte](4)
+    val inputStream = new FileInputStream(file)
+    try {
+      if (inputStream.read(buffer) == -1) None
+      else Some(buffer.map(b => f"$b%02X").mkString)
+    } finally {
+      inputStream.close()
+    }
+  }
+
+  def isImageBySignature(file: File): Boolean = {
+    val imageSignatures = Set(
+      "FFD8FF", // JPEG
+      "89504E47", // PNG
+      "47494638", // GIF
+      "49492A00", // TIFF (little-endian)
+      "4D4D002A", // TIFF (big-endian)
+      "424D" // BMP
+    )
+    getFileSignature(file).exists(sig => imageSignatures.exists(sig.startsWith))
+  }
+
   def isImage(file: File): Boolean = {
     val imageExtensions = Set("jpg", "jpeg", "png", "gif", "bmp", "tiff", "webp", "heic", "heif")
-    file.isFile && imageExtensions.exists(file.getName.toLowerCase.endsWith)
+    file.isFile &&
+      imageExtensions.exists(file.getName.toLowerCase.endsWith) &&
+      isImageBySignature(file)
   }
 
   def listFiles(dir: File): List[File] = {
@@ -19,16 +44,13 @@ object ImageFileChecker {
   }
 
   def main(args: Array[String]): Unit = {
-
     val dir = new File("/Users/shan/Les/")
-
     if (!dir.exists || !dir.isDirectory) {
       println(s"Invalid directory: ${args(0)}")
       sys.exit(1)
     }
 
     val files = listFiles(dir)
-
     val imageFiles = files.filter(isImage)
 
     if (imageFiles.isEmpty) {
@@ -38,5 +60,4 @@ object ImageFileChecker {
       imageFiles.foreach(file => println(file.getAbsolutePath))
     }
   }
-
 }
