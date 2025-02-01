@@ -4,11 +4,12 @@ import java.io._
 import org.apache.tika.Tika
 import dev.brachtendorf.jimagehash.hashAlgorithms.DifferenceHash
 import javax.imageio.ImageIO
+import scala.collection.mutable
 
 object ImageFileChecker {
 
   private val tika = new Tika()
-  private val hashAlgorithm = new DifferenceHash(64, DifferenceHash.Precision.Simple)
+  private val hashAlgorithm = new DifferenceHash(64, DifferenceHash.Precision.Triple)
 
   def isImage(file: File): Boolean = {
     file.isFile && {
@@ -39,11 +40,17 @@ object ImageFileChecker {
     if (imageFiles.isEmpty) {
       println("No image files found.")
     } else {
-      println("Image files and their perceptual hashes:")
+      val duplicates = findDuplicateImages(imageFiles)
 
-      imageFiles.foreach { file =>
-        val hash = computePerceptualHash(file)
-        println(s"${file.getAbsolutePath} -> $hash")
+      if (duplicates.isEmpty) {
+        println("No duplicate images detected.")
+      } else {
+        println("Duplicate images detected:")
+        duplicates.foreach {
+          case (hash, fileList) =>
+            println(s"Images with hash [$hash]:")
+            fileList.foreach(file => println(s" - ${file.getAbsolutePath}"))
+        }
       }
     }
   }
@@ -54,4 +61,18 @@ object ImageFileChecker {
     hash.toString
   }
 
+  private def findDuplicateImages(imageFiles: List[File]): Map[String, List[File]] = {
+    val hashToFileMap = mutable.Map[String, List[File]]()
+
+    imageFiles.foreach { file =>
+      val hash = computePerceptualHash(file)
+
+      hashToFileMap.updateWith(hash) {
+        case Some(files) => Some(file :: files)
+        case None        => Some(List(file))
+      }
+    }
+
+    hashToFileMap.filter { case (_, fileList) => fileList.size > 1 }.toMap
+  }
 }
