@@ -1,18 +1,22 @@
 package ltd.kalai.les.assignment4
 
-import java.awt.image.BufferedImage
-import java.io._
-import javax.imageio.ImageIO
-import org.apache.tika.Tika
-import dev.brachtendorf.jimagehash.hashAlgorithms.DifferenceHash
-import scala.collection.mutable
-import scala.util.boundary, boundary.break
 import com.google.common.cache.{CacheBuilder, CacheLoader, LoadingCache}
+import dev.brachtendorf.jimagehash.hashAlgorithms.DifferenceHash
+import org.apache.tika.Tika
+import org.slf4j.LoggerFactory
 
+import java.awt.image.BufferedImage
+import java.io.*
 import java.util.concurrent.TimeUnit
+import javax.imageio.ImageIO
+import scala.collection.mutable
+import scala.collection.parallel.CollectionConverters.*
+import scala.util.boundary
+import scala.util.boundary.break
 
 object ImageFileChecker {
 
+  private val logger = LoggerFactory.getLogger(this.getClass)
   private val tika = new Tika()
   private val hashAlgorithm = new DifferenceHash(64, DifferenceHash.Precision.Triple)
 
@@ -32,40 +36,55 @@ object ImageFileChecker {
       mimeType.startsWith("image/")
     }
   }
+  
+  def listFiles(root: File): List[File] = {
+    val fileList = mutable.ListBuffer[File]()
+    val stack = mutable.Stack[File](root)
 
-  def listFiles(dir: File): List[File] = {
-    val contents = dir.listFiles
-    if (contents != null) {
-      contents.toList.flatMap { file =>
-        if (file.isDirectory) listFiles(file) else List(file)
+    while (stack.nonEmpty) {
+      val current = stack.pop()
+      if (current.isDirectory) {
+        stack.pushAll(current.listFiles())
+      } else {
+        fileList += current
       }
-    } else Nil
+    }
+
+    fileList.toList
+  }
+
+  def validateDirectory(dir: File): Unit = {
+    if (!dir.exists || !dir.isDirectory) {
+      throw new IllegalArgumentException(s"Invalid directory: ${dir.getAbsolutePath}")
+    }
+  }
+
+  def processDuplicates(images: List[File]): List[List[File]] = {
+    findDuplicateImageGroups(images)
+  }
+
+  def printDuplicateGroups(duplicateGroups: List[List[File]]): Unit = {
+    if (duplicateGroups.isEmpty) {
+      println("No duplicate images detected.")
+    } else {
+      println("Duplicate image groups detected:")
+      duplicateGroups.foreach { group =>
+        println("Duplicate group:")
+        group.foreach(file => println(s" - ${file.getAbsolutePath}"))
+      }
+    }
   }
 
   def main(args: Array[String]): Unit = {
-    val dir = new File("/Users/shan/Les/")
-    if (!dir.exists || !dir.isDirectory) {
-      println(s"Invalid directory: ${args(0)}")
-      sys.exit(1)
-    }
-
-    val files = listFiles(dir)
-    val imageFiles = files.filter(isImage)
-
-    if (imageFiles.isEmpty) {
-      println("No image files found.")
-    } else {
+    logger.info("Starting ImageFileChecker...")
+    try {
+      val dir = new File(args(0))
+      validateDirectory(dir)
+      val imageFiles = listFiles(dir).par.filter(isImage).toList
       val duplicateGroups = findDuplicateImageGroups(imageFiles)
-
-      if (duplicateGroups.isEmpty) {
-        println("No duplicate images detected.")
-      } else {
-        println("Duplicate image groups detected:")
-        duplicateGroups.foreach { duplicates =>
-          println("Duplicate group:")
-          duplicates.foreach(file => println(s" - ${file.getAbsolutePath}"))
-        }
-      }
+      printDuplicateGroups(duplicateGroups)
+    } catch {
+      case e: Exception => logger.error("An error occurred", e)
     }
   }
 
