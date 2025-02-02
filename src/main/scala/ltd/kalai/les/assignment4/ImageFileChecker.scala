@@ -7,11 +7,24 @@ import org.apache.tika.Tika
 import dev.brachtendorf.jimagehash.hashAlgorithms.DifferenceHash
 import scala.collection.mutable
 import scala.util.boundary, boundary.break
+import com.google.common.cache.{CacheBuilder, CacheLoader, LoadingCache}
+
+import java.util.concurrent.TimeUnit
 
 object ImageFileChecker {
 
   private val tika = new Tika()
   private val hashAlgorithm = new DifferenceHash(64, DifferenceHash.Precision.Triple)
+
+  private val maxImageSize = 100
+  private val imageCache: LoadingCache[File, BufferedImage] = CacheBuilder.newBuilder()
+    .maximumSize(maxImageSize)
+    .expireAfterAccess(10, TimeUnit.MINUTES)
+    .build(new CacheLoader[File, BufferedImage]() {
+      override def load(file: File): BufferedImage = {
+        ImageIO.read(file)
+      }
+    })
 
   def isImage(file: File): Boolean = {
     file.isFile && {
@@ -57,7 +70,7 @@ object ImageFileChecker {
   }
 
   private def computePerceptualHash(file: File): String = {
-    val bufferedImage = ImageIO.read(file)
+    val bufferedImage = imageCache.get(file)
     val hash = hashAlgorithm.hash(bufferedImage)
     hash.toString
   }
@@ -86,11 +99,11 @@ object ImageFileChecker {
     val duplicates = mutable.ListBuffer[File]()
 
     for (i <- files.indices) {
-      val image1 = ImageIO.read(files(i))
+      val image1 = imageCache.get(files(i))
       var isDuplicate = false
 
       for (j <- i + 1 until files.size) {
-        val image2 = ImageIO.read(files(j))
+        val image2 = imageCache.get(files(j))
         if (imagesAreIdentical(image1, image2)) {
           duplicates.append(files(j))
           isDuplicate = true
