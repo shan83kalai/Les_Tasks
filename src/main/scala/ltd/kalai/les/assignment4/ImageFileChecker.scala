@@ -6,6 +6,7 @@ import javax.imageio.ImageIO
 import org.apache.tika.Tika
 import dev.brachtendorf.jimagehash.hashAlgorithms.DifferenceHash
 import scala.collection.mutable
+import scala.util.boundary, boundary.break
 
 object ImageFileChecker {
 
@@ -41,14 +42,15 @@ object ImageFileChecker {
     if (imageFiles.isEmpty) {
       println("No image files found.")
     } else {
-      val duplicates = findDuplicateImagesWithFullComparison(imageFiles)
+      val duplicateGroups = findDuplicateImageGroups(imageFiles)
 
-      if (duplicates.isEmpty) {
+      if (duplicateGroups.isEmpty) {
         println("No duplicate images detected.")
       } else {
-        println("Duplicate images detected:")
-        duplicates.foreach { case (image1, image2) =>
-          println(s"Duplicate pair: ${image1.getAbsolutePath} and ${image2.getAbsolutePath}")
+        println("Duplicate image groups detected:")
+        duplicateGroups.foreach { duplicates =>
+          println("Duplicate group:")
+          duplicates.foreach(file => println(s" - ${file.getAbsolutePath}"))
         }
       }
     }
@@ -60,7 +62,7 @@ object ImageFileChecker {
     hash.toString
   }
 
-  private def findDuplicateImagesWithFullComparison(imageFiles: List[File]): List[(File, File)] = {
+  private def findDuplicateImageGroups(imageFiles: List[File]): List[List[File]] = {
     val hashToFileMap = mutable.Map[String, List[File]]()
 
     imageFiles.foreach { file =>
@@ -72,25 +74,30 @@ object ImageFileChecker {
       }
     }
 
-    val potentialDuplicates = hashToFileMap.filter { case (_, fileList) => fileList.size > 1 }
-    val confirmedDuplicates = for {
-      (_, fileList) <- potentialDuplicates
-      duplicates <- performFullImageComparison(fileList)
-    } yield duplicates
+    val duplicateGroups = hashToFileMap.values.flatMap { fileGroup =>
+      val fullyValidatedGroup = validateDuplicatesWithFullComparison(fileGroup)
+      if (fullyValidatedGroup.size > 1) Some(fullyValidatedGroup) else None
+    }
 
-    confirmedDuplicates.toList
+    duplicateGroups.toList
   }
 
-  private def performFullImageComparison(files: List[File]): List[(File, File)] = {
-    val duplicates = mutable.ListBuffer[(File, File)]()
+  private def validateDuplicatesWithFullComparison(files: List[File]): List[File] = {
+    val duplicates = mutable.ListBuffer[File]()
 
-    for (i <- files.indices; j <- i + 1 until files.size) {
+    for (i <- files.indices) {
       val image1 = ImageIO.read(files(i))
-      val image2 = ImageIO.read(files(j))
+      var isDuplicate = false
 
-      if (imagesAreIdentical(image1, image2)) {
-        duplicates.append((files(i), files(j)))
+      for (j <- i + 1 until files.size) {
+        val image2 = ImageIO.read(files(j))
+        if (imagesAreIdentical(image1, image2)) {
+          duplicates.append(files(j))
+          isDuplicate = true
+        }
       }
+
+      if (!duplicates.contains(files(i))) duplicates.append(files(i))
     }
 
     duplicates.toList
@@ -99,10 +106,15 @@ object ImageFileChecker {
   private def imagesAreIdentical(img1: BufferedImage, img2: BufferedImage): Boolean = {
     if (img1.getWidth != img2.getWidth || img1.getHeight != img2.getHeight) return false
 
-    for (x <- 0 until img1.getWidth; y <- 0 until img1.getHeight) {
-      if (img1.getRGB(x, y) != img2.getRGB(x, y)) return false
-    }
+    boundary {
+      for (x <- 0 until img1.getWidth; y <- 0 until img1.getHeight) {
+        if (img1.getRGB(x, y) != img2.getRGB(x, y)) {
+          break(false)
+        }
+      }
 
-    true
+      true
+    }
   }
+
 }
