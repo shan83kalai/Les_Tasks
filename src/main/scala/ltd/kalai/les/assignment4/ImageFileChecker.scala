@@ -7,8 +7,10 @@ import org.slf4j.LoggerFactory
 
 import java.awt.image.BufferedImage
 import java.io.*
+import java.nio.file.{Files, Path}
 import javax.imageio.ImageIO
 import scala.collection.concurrent.TrieMap
+import scala.jdk.StreamConverters.*
 import scala.util.boundary
 import scala.util.boundary.break
 
@@ -42,9 +44,6 @@ object ImageFileChecker {
       mimeType.startsWith("image/")
     }
   }
-
-  import java.nio.file.{Files, Path}
-  import scala.jdk.StreamConverters.*
 
   def listFiles(root: File): List[File] = {
     Files.walk(root.toPath)
