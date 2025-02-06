@@ -2,6 +2,7 @@ package ltd.kalai.les.assignment4
 
 import com.google.common.cache.{CacheBuilder, CacheLoader, LoadingCache}
 import dev.brachtendorf.jimagehash.hashAlgorithms.DifferenceHash
+import org.apache.commons.io.FileUtils
 import org.apache.tika.Tika
 import org.slf4j.LoggerFactory
 
@@ -21,12 +22,21 @@ object ImageFileChecker {
   private val hashAlgorithm = new DifferenceHash(64, DifferenceHash.Precision.Triple)
 
   private val maxImageSize = 100
-  private val imageCache: LoadingCache[File, BufferedImage] = CacheBuilder.newBuilder()
+  private val imageCache: LoadingCache[File, Either[Exception, BufferedImage]] = CacheBuilder.newBuilder()
     .maximumSize(maxImageSize)
     .expireAfterAccess(10, TimeUnit.MINUTES)
-    .build(new CacheLoader[File, BufferedImage]() {
-      override def load(file: File): BufferedImage = {
-        ImageIO.read(file)
+    .build(new CacheLoader[File, Either[Exception, BufferedImage]]() {
+      override def load(file: File): Either[Exception, BufferedImage] = {
+        try {
+          val bufferedImage = ImageIO.read(file)
+          if (bufferedImage == null) {
+            Left(new Exception(s"Failed to read image: ${file.getAbsolutePath}"))
+          } else {
+            Right(bufferedImage)
+          }
+        } catch {
+          case e: Exception => Left(e)
+        }
       }
     })
 
@@ -59,11 +69,11 @@ object ImageFileChecker {
     }
   }
 
-  def processDuplicates(images: List[File]): List[List[File]] = {
+  def processDuplicates(images: List[File]): List[Set[File]] = {
     findDuplicateImageGroups(images)
   }
 
-  def printDuplicateGroups(duplicateGroups: List[List[File]]): Unit = {
+  def printDuplicateGroups(duplicateGroups: List[Set[File]]): Unit = {
     if (duplicateGroups.isEmpty) {
       println("No duplicate images detected.")
     } else {
@@ -82,27 +92,35 @@ object ImageFileChecker {
       validateDirectory(dir)
       val imageFiles = listFiles(dir).par.filter(isImage).toList
       val duplicateGroups = findDuplicateImageGroups(imageFiles)
-      printDuplicateGroups(duplicateGroups)
+      if (duplicateGroups.nonEmpty) {
+        printDuplicateGroups(duplicateGroups)
+      } else {
+        println("No duplicates found.")
+      }
     } catch {
       case e: Exception => logger.error("An error occurred", e)
     }
   }
 
   private def computePerceptualHash(file: File): String = {
-    val bufferedImage = imageCache.get(file)
-    val hash = hashAlgorithm.hash(bufferedImage)
-    hash.toString
+    imageCache.get(file) match {
+      case Right(bufferedImage) =>
+        val hash = hashAlgorithm.hash(bufferedImage)
+        hash.toString
+      case Left(exception) =>
+        throw new RuntimeException(s"Failed to load image ${file.getAbsolutePath}: ${exception.getMessage}", exception)
+    }
   }
 
-  private def findDuplicateImageGroups(imageFiles: List[File]): List[List[File]] = {
-    val hashToFileMap = mutable.Map[String, List[File]]()
+  private def findDuplicateImageGroups(imageFiles: List[File]): List[Set[File]] = {
+    val hashToFileMap = mutable.Map[String, Set[File]]()
 
-    imageFiles.foreach { file =>
+    imageFiles.distinct.foreach { file =>
       val hash = computePerceptualHash(file)
 
       hashToFileMap.updateWith(hash) {
-        case Some(files) => Some(file :: files)
-        case None        => Some(List(file))
+        case Some(files) => Some(files + file)
+        case None => Some(Set(file))
       }
     }
 
@@ -114,33 +132,36 @@ object ImageFileChecker {
     duplicateGroups.toList
   }
 
-  private def validateDuplicatesWithFullComparison(files: List[File]): List[File] = {
-    val duplicates = mutable.ListBuffer[File]()
-
-    for (i <- files.indices) {
-      val image1 = imageCache.get(files(i))
-      var isDuplicate = false
-
-      for (j <- i + 1 until files.size) {
-        val image2 = imageCache.get(files(j))
-        if (imagesAreIdentical(image1, image2)) {
-          duplicates.append(files(j))
-          isDuplicate = true
+  private def validateDuplicatesWithFullComparison(files: Set[File]): Set[File] = {
+    files.filter { file1 =>
+      files.exists { file2 =>
+        file1 != file2 && {
+          (imageCache.get(file1), imageCache.get(file2)) match {
+            case (Right(img1), Right(img2)) =>
+              imagesAreIdentical(img1, img2) && FileUtils.contentEquals(file1, file2)
+            case (Left(error1), _) =>
+              logger.warn(s"Unable to process file ${file1.getAbsolutePath}: ${error1.getMessage}")
+              false
+            case (_, Left(error2)) =>
+              logger.warn(s"Unable to process file ${file2.getAbsolutePath}: ${error2.getMessage}")
+              false
+          }
         }
       }
-
-      if (!duplicates.contains(files(i))) duplicates.append(files(i))
     }
-
-    duplicates.toList
   }
 
   private def imagesAreIdentical(img1: BufferedImage, img2: BufferedImage): Boolean = {
     if (img1.getWidth != img2.getWidth || img1.getHeight != img2.getHeight) return false
 
+    val raster1 = img1.getData
+    val raster2 = img2.getData
+
     boundary {
-      for (x <- 0 until img1.getWidth; y <- 0 until img1.getHeight) {
-        if (img1.getRGB(x, y) != img2.getRGB(x, y)) {
+      for (y <- 0 until img1.getHeight) {
+        val row1: Array[Int] = raster1.getPixels(0, y, img1.getWidth, 1, null.asInstanceOf[Array[Int]])
+        val row2: Array[Int] = raster2.getPixels(0, y, img2.getWidth, 1, null.asInstanceOf[Array[Int]])
+        if (!row1.sameElements(row2)) {
           break(false)
         }
       }
