@@ -95,3 +95,44 @@ The `docker logs` command retrieves logs from a specific Docker container. In th
 For example, you may use this command if the Kafka container is restarting or not functioning correctly.
 
 ---
+
+## Producing and Consuming Messages in Kafka
+
+### Producing a Message
+To publish a message to the Kafka topic (`play-scala-kafka-topic`), use the **Kafka Console Producer**:
+
+1. Run the following command:
+   ```bash
+   docker exec -it play-scala-kafka-kafka /opt/bitnami/kafka/bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic play-scala-kafka-topic
+   ```
+
+2. A prompt will appear. Type your message and press **Enter** to send it to the topic. For example:
+   ```text
+   Hello Kafka my First Message!
+   ```
+
+3. You can send multiple messages by typing each message and pressing **Enter**.
+
+4. To exit the producer, press **Ctrl+C**.
+
+---
+
+### Consuming Messages
+To view messages sent to the Kafka topic, use the **Kafka Console Consumer**:
+
+1. Run the following command:
+   ```bash
+   docker exec -it play-scala-kafka-kafka /opt/bitnami/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic play-scala-kafka-topic --from-beginning
+   ```
+
+2. This command will display all messages sent to the `play-scala-kafka-topic` topic from the beginning.
+
+3. Example output:
+   ```plaintext
+   Hello Kafka my First Message!
+   Another message
+   ```
+
+4. To stop reading messages, press **Ctrl+C**.
+
+---
