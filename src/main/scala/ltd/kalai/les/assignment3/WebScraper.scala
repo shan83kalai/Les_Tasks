@@ -4,16 +4,19 @@ import com.google.common.cache.{Cache, CacheBuilder}
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.select.Elements
-import org.slf4j.LoggerFactory
 
+import org.slf4j.LoggerFactory
 import java.io.{File, PrintWriter}
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
+import scala.annotation.tailrec
+import scala.collection.parallel.CollectionConverters.*
 import scala.concurrent.duration.*
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.jdk.CollectionConverters.CollectionHasAsScala
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Left, Right, Success, Try}
+
 
 object WebScraper {
 
@@ -122,6 +125,7 @@ object WebScraper {
     }
   }
 
+  @tailrec
   private def recursivelyExtractLinksParallel(links: List[LinkInfo])(implicit ec: ExecutionContext): Future[Unit] = {
     logger.debug(s"Recursively processing ${links.size} links...")
 
@@ -130,31 +134,28 @@ object WebScraper {
       return Future.successful(())
     }
 
-    val futures = links.map { link =>
-      Future {
-        logger.info(s"Fetching links for URL: ${link.url}")
-        extractLinks(link.url) match {
-          case Right(nestedLinks) =>
-            logger.info(s"Extracted ${nestedLinks.size} links from ${link.url}")
-            nestedLinks
-          case Left(error) =>
-            logger.error(s"Error extracting links from ${link.url}: $error")
-            List.empty
-        }
+    val parallelLinks = links.par
+    val results = parallelLinks.map { link =>
+      logger.info(s"Fetching links for URL: ${link.url}")
+      extractLinks(link.url) match {
+        case Right(nestedLinks) =>
+          logger.info(s"Extracted ${nestedLinks.size} links from ${link.url}")
+          nestedLinks
+        case Left(error) =>
+          logger.error(s"Error extracting links from ${link.url}: $error")
+          List.empty
       }
-    }
+    }.toList
 
-    Future.sequence(futures).flatMap { results =>
-      val combinedResults = results.flatten.filter(link => Option(visitedUrlsCache.getIfPresent(link.url)).isEmpty)
-      logger.info(s"Found ${combinedResults.size} new links for processing.")
-      addLinks(combinedResults)
+    val combinedResults = results.flatten.filter(link => Option(visitedUrlsCache.getIfPresent(link.url)).isEmpty)
+    logger.info(s"Found ${combinedResults.size} new links for processing.")
+    addLinks(combinedResults)
 
-      if (combinedResults.nonEmpty && totalUrls.get() < totalExpectedCount) {
-        recursivelyExtractLinksParallel(combinedResults)
-      } else {
-        logger.info("No more links to process or limit reached.")
-        Future.successful(())
-      }
+    if (combinedResults.nonEmpty && totalUrls.get() < totalExpectedCount) {
+      recursivelyExtractLinksParallel(combinedResults)
+    } else {
+      logger.info("No more links to process or limit reached.")
+      Future.successful(())
     }
   }
 
@@ -194,3 +195,7 @@ object WebScraper {
   }
 
 }
+
+//  01:08:50.302 [main] INFO ltd.kalai.les.assignment3.WebScraper$ -- Total 1000000 links saved to extracted_links.csv
+//  01:08:50.302 [main] INFO ltd.kalai.les.assignment3.WebScraper$ -- Completed link extraction at Tue Jan 28 01:08:50 GMT 2025
+//  01:08:50.302 [main] INFO ltd.kalai.les.assignment3.WebScraper$ -- Total time taken: 7 minutes
