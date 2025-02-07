@@ -122,10 +122,10 @@ To view messages sent to the Kafka topic, use the **Kafka Console Consumer**:
 
 1. Run the following command:
    ```bash
-   docker exec -it play-scala-kafka-kafka /opt/bitnami/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic play-scala-kafka-topic --from-beginning
+   docker exec -it play-scala-kafka-kafka /opt/bitnami/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic play-scala-kafka-topic --from-beginning --group play-scala-consumer-group-1
    ```
 
-2. This command will display all messages sent to the `play-scala-kafka-topic` topic from the beginning.
+2. This command will display all messages sent to the `play-scala-kafka-topic` topic from the beginning, associating it with the consumer group `play-scala-consumer-group-1`.
 
 3. Example output:
    ```plaintext
@@ -133,6 +133,27 @@ To view messages sent to the Kafka topic, use the **Kafka Console Consumer**:
    Another message
    ```
 
-4. To stop reading messages, press **Ctrl+C**.
+4. If you re-run the command with the same consumer group (`play-scala-consumer-group-1`), only new messages will be consumed (since offsets are tracked for the group).
+
+5. To stop reading messages, press **Ctrl+C**.
 
 ---
+
+## Managing Kafka Consumer Groups
+
+### Listing All Consumer Groups
+To list all consumer groups in the Kafka cluster, use the following command:
+
+```bash
+docker exec -it play-scala-kafka-kafka /opt/bitnami/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --list
+```
+
+This command will display a list of all consumer groups that exist in Kafka. Example:
+```plaintext
+play-scala-consumer-group-1
+another-consumer-group
+```
+
+---
+
+These two commands—consuming messages with a consumer group and listing all existing consumer groups—now ensure better tracking and management in Kafka.
