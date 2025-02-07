@@ -154,6 +154,81 @@ play-scala-consumer-group-1
 another-consumer-group
 ```
 
----
+## Resetting Kafka Consumer Offsets
 
-These two commands—consuming messages with a consumer group and listing all existing consumer groups—now ensure better tracking and management in Kafka.
+There are several strategies to reset consumer offsets in Kafka, depending on your use case. Below are the 5 most common reset strategies:
+
+1. **Reset to the Earliest Offset**:
+   This resets the consumer group to start from the earliest available messages in the topic.
+
+```shell script
+docker exec -it play-scala-kafka-kafka /opt/bitnami/kafka/bin/kafka-consumer-groups.sh \
+     --bootstrap-server localhost:9092 \
+     --group <consumer-group-name> \
+     --topic <topic-name> \
+     --reset-offsets \
+     --to-earliest \
+     --execute
+```
+
+2. **Reset to the Latest Offset**:
+   This moves the consumer group to the most recent offsets, skipping all past messages.
+
+```shell script
+docker exec -it play-scala-kafka-kafka /opt/bitnami/kafka/bin/kafka-consumer-groups.sh \
+     --bootstrap-server localhost:9092 \
+     --group <consumer-group-name> \
+     --topic <topic-name> \
+     --reset-offsets \
+     --to-latest \
+     --execute
+```
+
+3. **Reset to a Specific Offset**:
+   You can reset the offset for a specific partition to an absolute offset value.
+
+```shell script
+docker exec -it play-scala-kafka-kafka /opt/bitnami/kafka/bin/kafka-consumer-groups.sh \
+     --bootstrap-server localhost:9092 \
+     --group <consumer-group-name> \
+     --topic <topic-name> \
+     --partition 0 \
+     --reset-offsets \
+     --to-offset <offset-value> \
+     --execute
+```
+
+4. **Reset by Duration**:
+   Use this to reset offsets based on a duration of time (e.g., messages produced in the last hour).
+
+```shell script
+docker exec -it play-scala-kafka-kafka /opt/bitnami/kafka/bin/kafka-consumer-groups.sh \
+     --bootstrap-server localhost:9092 \
+     --group <consumer-group-name> \
+     --topic <topic-name> \
+     --reset-offsets \
+     --by-duration PT1H \
+     --execute
+```
+
+5. **Reset to a Specific Timestamp**:
+   Targets the offsets that correspond to messages produced after a specific timestamp.
+
+```shell script
+docker exec -it play-scala-kafka-kafka /opt/bitnami/kafka/bin/kafka-consumer-groups.sh \
+     --bootstrap-server localhost:9092 \
+     --group <consumer-group-name> \
+     --topic <topic-name> \
+     --reset-offsets \
+     --to-datetime 2023-10-08T12:00:00.000 \
+     --execute
+```
+
+### Notes:
+- Use the `--dry-run` option to preview the offsets before applying the reset:
+```shell script
+--dry-run
+```
+- Ensure the consumer group is not actively consuming data while performing a reset.
+
+---
