@@ -13,10 +13,9 @@ This project demonstrates a Kafka-based Scala application using [Play Framework]
 ---
 
 ## Prerequisites
-
-- Docker and Docker-Compose installed.
-- Java 21 installed on your system.
-- SBT (Scala Build Tool) installed.
+- Docker and Docker-Compose installed (`brew install --cask docker`)
+- Java 21 installed on your system (`brew install openjdk@21`)
+- SBT (Scala Build Tool) installed (`brew install sbt`)
 
 ---
 
